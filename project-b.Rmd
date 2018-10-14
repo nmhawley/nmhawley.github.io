@@ -1,0 +1,132 @@
+---
+title: "Asian-Americans in San Francisco"
+author: "Natalie Hawley"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(fig.height = 5)
+knitr::opts_chunk$set(fig.width = 8.5)
+knitr::opts_chunk$set(out.width = "100%")
+knitr::opts_chunk$set(dpi = 300)
+
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(ggmap)
+library(viridis)
+library(forcats)
+library(smodels)
+library(reshape2)
+```
+
+```{r}
+tracts <- read_csv("https://raw.githubusercontent.com/statsmaths/stat_data/gh-pages/acs_tract_data_2016.csv.gz")
+san_francisco <- filter(tracts, county == "San Francisco County")
+sf_table <- san_francisco[order(san_francisco$race_asian), c(4,5,24)]
+sf_table <- sf_table[c(1,2,3,189,190), ]
+san_francisco$predominant_race <- cut(san_francisco$race_asian, breaks=c(-Inf, 50, Inf), labels=c("Asian","White"))
+race50 <- group_summarize(san_francisco, predominant_race)
+race50 <- race50[-c(2:4, 11:342)]
+race50_income<-melt(race50,id.vars="predominant_race")
+san_francisco$income_100_plus <- san_francisco$income_100_125 + san_francisco$income_125_150 + san_francisco$income_150_200 + san_francisco$income_200_999
+```
+
+###Introduction
+San Francisco has one of the largest Asian-American populations of all major U.S. cities, and the population keeps growing year by year. The city of San Francisco itself is about 35.8% Asian, compared to the U.S. national value of 5.6% (SFGate, 2012). Of each tract within the city, only one has a population with a lower percentage of Asian-Americans than the national percentage, and many areas are well above that value.
+
+```{r}
+sf_table <- matrix(c(-122.4461,37.76577,4.35,-122.4663,37.79755,5.83,-122.3760,37.73563,6.16,"...","...","...",-122.4062,37.79335,83.29,-122.4041,37.79556,91.14),ncol=3,byrow=TRUE)
+colnames(sf_table) <- c("Longitude","Latitude","Asian-Americans (%)")
+sf_table <- as.table(sf_table)
+sf_table
+```
+
+Opportunities in the tech industry are one of the biggest reasons Asian-Americans are being attracted to move to the Bay Area (SFGate, 2012). San Francisco has many strong jobs in STEM fields, and Asian-Americans are consistently some of the strongest workers in these fields. Asian-Americans have taken up half of the Bay Area's technology workforce (Mercury News, 2012).
+
+Through census data, I was able to explore several different aspects of the lives of Asian-Americans living in San Francisco. I will be focusing especially on the relationship between race and income in the Bay Area and how it all relates to the growing tech industry.
+
+###Income Gap of up to $200K Between White and Asian Neighborhoods
+
+The "Asian advantage" is a well-known phenomenon as Asian-Americans have been consistently earning more than white Americans in the workforce for the past few decades (Washington Post, 2016). I set out to see if this phenomenon held true in San Francisco.
+
+All but one neighborhood (which is predominantly African-American) has a majority of white or Asian residents, so I split the census data into predominantly white and predominantly Asian neighborhoods to look at an income comparison.
+
+```{r}
+ggplot(race50_income, aes(variable,value,fill=factor(predominant_race)))+
+  geom_bar(stat="identity",position="dodge")+
+  ggtitle("Income Gap Between Predominantly White and Predominantly Asian Areas")+
+  xlab("Income Quintile")+
+  ylab("Average Yearly Income ($)") +
+  scale_fill_manual(values=c("#00CCE2","#FF89B2"), name="Predominant Race", labels=c("Asian","White"))+
+  scale_x_discrete(labels=c("First","Second","Third","Fourth","Fifth","Top 5%"))
+```
+
+Asian-Americans seem to be earning more within every single income quintile, and at the top 5% income bracket, there is a gap of over $200,000 dollars between the average yearly incomes of households in white neighborhoods and in Asian neighborhoods.
+
+On average, Asian households earn more than white households due to stronger educational backgrounds. In the Bay Area specifically, Asian-Americans have been displacing white workers in the tech industry.
+
+###Asian-American Neighborhoods Concentrated in Areas with Low Rent
+
+There is a diverse spectrum of the proportion of Asians in each tract throughout the city-some areas have a very small percentage of Asian-Americans while the population of some areas is nearly entirely Asian. However, as seen in the map below, neighborhoods with similar concentrations of Asians seem to be grouped together.
+
+```{r}
+qmplot(lon, lat, data = san_francisco, geom = "blank") +
+  geom_point(aes(color=race_asian, size=median_rent)) +
+  ggtitle("Median Rents and Asian-American Populations in San Francisco") +
+  annotate("text", x=-122.3915, y=37.79556, label="Chinatown", size=3.5) +
+  annotate("text", x=-122.4461, y=37.763, label="Ashbury Heights", size=3.5) +
+  scale_color_continuous(name="Asian-Americans (%)",low="#FF89B2",high="#00CCE2") +
+  scale_size_continuous(name="Median Rent ($)")
+```
+
+The color of the points on the map show the percentage of residents who identify as Asian in that tract. Points that are more blue have a higher proportion of Asian-Americans. Although the census data presents us with the fact that there are several areas in San Francisco with many Asian-Americans, the map helps us to visualize where the highest percentage of them are living.
+
+The most concentrated areas frame the outside edges of the city as well as a small area in the northeast corner. This is Chinatown.
+
+The tract with the lowest percentage of Asian-Americans comes out of a neighborhood called Ashbury Heights, which is found in the center of the city. The center city in particular clearly lacks a strong Asian population. Asians may be getting displaced from this area because the center of the city has some of the most expensive rents and a high cost of living (CityLab, 2015).
+
+This map of the city gives us another piece of information besides the concentration of Asian-Americans, and that is the median rent of each neighborhood, represented as the size of each point. The few patterns relating to rent are not as obvious.
+
+In San Francisco's Chinatown, the rent is clearly lower than the surrounding areas. In general, the rents in predominantly Asian areas are on the lower end of the spectrum. There are a few neighborhoods with a higher percentage of whites whose rents dip below the average rent for the Asian neighborhoods. Many white neighborhoods also have much higher rents as well while the Asian areas stay within a tighter range for the most part.
+
+###Wealthy Asian-Americans are Commuting by Car
+
+It is shocking that despite having higher average incomes, Asian-Americans are choosing to live outside of the center city. It may also surprise you that as the percentage of Asian-Americans in an area increases, the percentage of the population with yearly incomes over $100,000 actually *decreases*.
+
+```{r}
+ggplot(san_francisco, aes(race_asian, income_100_plus)) +
+  geom_point(aes(color=commute_car))  +
+  geom_smooth(method = "lm", color = "black", se = FALSE, linetype = "dashed", size = 0.5) +
+  annotate("rect", xmin = 50, xmax = 75,
+                   ymin = 25, ymax = 62.5,
+                   fill = "purple", alpha = 0.05) +
+  ggtitle("Household Incomes over $100K in Areas of Different Concentrations of Asians") +
+  annotate("text", x = 62.5, y = 68.5, label="Most Commuters by Car", size = 3.5) +
+  xlab("Asian-Americans (%)") +
+  ylab("Households with Incomes over $100K (%)") +
+  scale_color_continuous(name="Commuters by Car (%)", low="#00CCE2",high="#FF89B2")
+```
+
+This makes sense as the areas with the highest percentage of Asians are areas such as Chinatown where residents will be running their own businesses and restaurants which usually have less potential for profit than working at a major corporation.
+
+The reason the average yearly income for Asian neighborhoods ends up coming out on top is because of the wider range of incomes in predominantly white areas. There are more tracts with over 50% white populations than those with over 50% Asian populations, so all of those neighborhoods are taken into the average.
+
+It is interesting how commute relates to both race and income. The highest earning Asian tracts are where we see the greatest use of cars for commuting. Residents of high-earning white areas are walking or taking public transportation to work. As shown in the map, white people are concentrated in the center of the city, and Asians live on the outer edges. Successful people from both races are likely to have jobs within the center city, but the typical Asian-American will have a longer commute.
+
+An area from the Sunset District of San Francisco, which is known for contributing many workers to the tech industry, has an Asian population of 57%, and 77% of its residents commute by car, the highest percentage in all of San Francisco.
+
+### References
+
+Fagan, Kevin. "Asian Population Swells in Bay Area, State, Nation." SFGate. August 06, 2012. https://www.sfgate.com/bayarea/article/Asian-population-swells-in-Bay-Area-state-nation-3425777.php.
+
+Florida, Richard, and Aria Bendix. "How to Fix San Francisco." CityLab. December 08, 2015. https://www.citylab.com/solutions/2015/12/how-to-fix-san-francisco/418329/.
+
+Guo, Jeff. "The Asian American 'advantage' That Is Actually an Illusion." The Washington Post. December 29, 2016. https://www.washingtonpost.com/news/wonk/wp/2016/12/29/the-asian-american-advantage-that-is-actually-an-illusion/?utm_term=.1d46503cee77.
+
+Nakaso, Dan. "Asian Workers Now Dominate Silicon Valley Tech Jobs." The Mercury News. August 13, 2016. https://www.mercurynews.com/2012/11/29/asian-workers-now-dominate-silicon-valley-tech-jobs/.
