@@ -1,0 +1,187 @@
+---
+title: Analysis of Garmin Data to Understand Fitness Adaptations and Responses to
+  Marathon Training
+author: "Natalie Hawley"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, echo = FALSE, include = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(modelr)
+library(ggsci)
+library(patchwork)
+options(na.action = na.warn)
+```
+
+```{r, echo = FALSE}
+#Import and Sort Data
+data <- read.csv("C:/Users/natal/Desktop/Dropbox/Professional/Portfolio Projects/Garmin/garmin-data.csv")
+colnames(data) <- c("week_start", "vo2_max", "resting_hr", "avg_stress", "weekly_mileage", "weekly_intensity_minutes")
+
+data$"week_start" <- as.Date(data$"week_start", format = "%m/%d/%Y")
+```
+
+My motivation for pursuing this analysis is mostly selfish. In November 2021, I ran my first marathon and am curious if the data from my Garmin watch will be able to provide any insights that will help me improve in my next training cycle.
+
+In this analysis, I inspected several metrics to measure my training load. Of course, I looked at the number of miles I was running each week, but I also included weekly intensity minutes to gauge the difficulty of my workouts and any supplemental training. The biometrics I explored to determine how my body adapted to and recovered from changes in my training load were resting heart rate, VO2 max, and average daily stress.
+
+In May, I began rebuilding my base fitness after returning from a stress fracture in my foot, and my marathon specific training began in July. Both my mileage and intensity minutes increased over the course of the training cycle with a few weeks of taper before race-week in mid-November.
+
+```{r, echo = FALSE, message = FALSE}
+data %>%
+  filter(week_start >= as.Date("2022-05-24")) %>%
+  arrange("week_start") %>%
+  ggplot(aes(x = week_start)) +
+  geom_smooth(aes(y = weekly_intensity_minutes*.95), se = FALSE, color = "azure3") +
+  geom_col(aes(y = weekly_mileage*25, fill = "Mileage"), 
+           width = 2.9,
+           position = position_nudge(x = 1.45)) +
+  geom_col(aes(y = weekly_intensity_minutes, fill = "Intensity Minutes"), 
+           width = 2.9,
+           position = position_nudge(x = -1.45))  +
+  labs(x = "Training Week",
+       title = "Weekly Mileage and Intensity During Marathon Training",
+       fill = "") +
+  scale_y_continuous(name = "Weekly Intensity Minutes", 
+    sec.axis = sec_axis(~./25, name = "Weekly Mileage", 
+    labels = function(b) { paste0(round(b * 1, 0))})) +
+  theme(legend.position = "bottom") +
+  annotate(geom = "text", x = as.Date("2022-07-12"), y = 1400, label = "Marathon-specific training begins", size = 3.2) +
+  annotate(geom = "segment", x = as.Date("2022-07-05"), y = 1350, xend = as.Date("2022-07-12"), yend = 1100) +
+  annotate(geom = "text", x = as.Date("2022-10-25"), y = 1650, label = " Taper begins", size = 3.2, hjust = "left") +
+  annotate(geom = "segment", x = as.Date("2022-11-01"), y = 1600, xend = as.Date("2022-10-18"), yend = 1475) +
+  annotate(geom = "text", x = as.Date("2022-11-08"), y = 1150, label = " Race week", size = 3.2) +
+  scale_fill_npg()
+```
+
+Depending on the volume, intensity, and frequency of training, athletes will have adaptive responses that either increase or decrease fitness and exercise capacity (Hawley, 2008). One adaptation typically seen in endurance athletes is a lower resting heart rate. Training decreases resting heart rate through several physiological changes--like increased stroke volume, which is the amount of blood your heart is able to pump (Jackson, 2015).
+
+```{r, echo = FALSE, message = FALSE}
+data %>%
+  ggplot(aes(weekly_mileage, resting_hr, color = resting_hr)) +
+  geom_smooth(method = lm, color = "azure3", se = FALSE) +
+  geom_jitter(size = 2) +
+  labs(title = "Relationship Between Resting Heart Rate and Weekly Mileage",
+       x = "Miles / Week",
+       y = "Average Resting Heart Rate",
+       color = "Resting HR") +
+  scale_color_gradient(low = "#4DBBD5", high = "#E64B35")
+```
+
+Overall, as the number of miles I was running each week was going up, my resting heart rate was going down. This is one indication that my fitness was improving in response to my training.
+
+During my training, I felt (data-independently) the greatest boost in my fitness when I added HIIT and speedwork into my training regimen. This change should have been reflected in the weekly intensity minutes rather than mileage. The intensity minutes stat quantifies how much intense exercise I got each week. Garmin watches automatically categorize physical activity as “moderate” or “vigorous” based on a user’s personal heart rate zones. When activity is categorized as vigorous, the number of minutes you were active gets multiplied by two.
+
+My observation of my fitness improving when my intensity increased made me curious if the data could answer whether intensity or mileage had a greater effect on my fitness. It was challenging to come up with a method for answering this question for several reasons. Primarily, mileage and intensity minutes are closely related and difficult to disentangle. Furthermore, there is a lag between training and fitness improvements (i.e., adaptation does not occur until several days after a training session), and this effect is difficult to account for. Finally, the Garmin intensity minutes algorithm may simply not be the most accurate way to track changes in intensity. Regardless, I was still curious if I could come up with an answer to this question.
+
+As seen above, the relationship between resting heart rate and mileage can be modeled by a line. The relationship between resting heart rate and intensity minutes can also be modeled linearly.
+
+```{r, echo = FALSE}
+
+model1 <- lm(resting_hr ~ weekly_mileage, data = data)
+model2 <- lm(resting_hr ~ weekly_intensity_minutes, data = data)
+
+#Plot for model 1
+grid <- data %>% 
+  data_grid(weekly_mileage) %>% 
+  add_predictions(model1)
+
+plot1 <- ggplot(data, aes(weekly_mileage)) +
+  geom_point(aes(y = resting_hr)) +
+  geom_line(aes(y = pred), data = grid, colour = "#E64B35", size = 1) +
+  annotate(geom = "text", x = 20, y = 58, label = "R-squared = 0.6633", size = 3.2) +
+    labs(title = "Linear Model for RHR and Mileage",
+       x = "Miles / Week",
+       y = "Average Resting Heart Rate")
+
+#Plot for model 2
+grid <- data %>% 
+  data_grid(weekly_intensity_minutes) %>% 
+  add_predictions(model2)
+
+plot2 <- ggplot(data, aes(weekly_intensity_minutes)) +
+  geom_point(aes(y = resting_hr)) +
+  geom_line(aes(y = pred), data = grid, colour = "#E64B35", size = 1) +
+  annotate(geom = "text", x = 1000, y = 55, label = "R-squared = 0.5496", size = 3.2) +
+    labs(title = "Linear Model for RHR and Intensity",
+       x = "Intensity Minutes / Week",
+       y = "Average Resting Heart Rate")
+
+plot1 + plot2
+```
+
+While neither model is particularly well-fit to the data, the R-squared value when predicting RHR from weekly mileage is higher than that for weekly intensity minutes, values of 0.6633 and 0.5496 respectively. To conduct a more thorough analysis, I would normalize the predictor variables (intensity and mileage are on very different scales) and create a model using both variables to compare the effects of removing one.
+
+I conducted the same analysis for another metric, VO2 max. VO2 max relates to the amount of oxygen an athlete is able to use during exercise (University of Virginia, 2022). You would expect to see improvements in this metric over a training cycle as an athlete obtains adaptions that allow them to use more oxygen.
+
+```{r, echo = FALSE}
+model3 <- lm(vo2_max ~ weekly_mileage, data = data)
+
+grid <- data %>% 
+  data_grid(weekly_mileage) %>% 
+  add_predictions(model3)
+
+plot3 <- ggplot(data, aes(weekly_mileage)) +
+  geom_point(aes(y = vo2_max)) +
+  geom_line(aes(y = pred), data = grid, colour = "red", size = 1) +
+  annotate(geom = "text", x = 30, y = 49, label = "R-squared = 0.1531", size = 3.2) +
+    labs(title = "Linear Model for VO2 Max \nand Mileage",
+       x = "Miles / Week",
+       y = "Average VO2 Max")
+
+model4 <- lm(vo2_max ~ weekly_intensity_minutes, data = data)
+
+grid <- data %>% 
+  data_grid(weekly_intensity_minutes) %>% 
+  add_predictions(model4)
+
+plot4 <- ggplot(data, aes(weekly_intensity_minutes)) +
+  geom_point(aes(y = vo2_max)) +
+  geom_line(aes(y = pred), data = grid, colour = "red", size = 1) +
+  annotate(geom = "text", x = 750, y = 48.5, label = "R-squared = 0.5496", size = 3.2) +
+    labs(title = "Linear Model for VO2 Max \nand Intensity",
+       x = "Intensity Minutes / Week",
+       y = "Average VO2 Max")
+
+plot3 + plot4
+```
+
+Just like above, the R-squared for the weekly mileage model is higher than R-squared for weekly intensity. However, there is even more variability in these models<sup>1</sup> with R-squared values of 0.1531 and 0.06172 respectively. Although the methodology is not perfect, the models would indicate that miles per week is actually a better predictor of resting heart rate and VO2 max.
+
+While my training program seems to have supported improvements in fitness, I was still left wondering if I could have trained harder. Garmin “stress levels” are calculated primarily based on heart rate and heart rate variability measurements. HRV decreases when the sympathetic branch of your nervous system is activated, an indicator of the stress response (Garmin, 2021). HRV and stress are important metrics for determining the boundary between optimized training and overtraining. While there is still significant research being done on changes in HRV related to training adaption (Singh et al., 2018), for the purposes of this project, we can assume elevated stress levels correspond to maladaptation while moderate levels mean the body is recovering properly and adapting well to training.
+
+```{r, echo = FALSE, message = FALSE}
+data %>%
+  ggplot(aes(week_start, avg_stress)) +
+  geom_point(size = 2, aes(color = avg_stress)) +
+  geom_smooth(color = "azure3", se = FALSE) +
+  labs(title = "Average Stress Levels During Marathon Training",
+       x = "Training Week",
+       y = "Average Daily Stress",
+       color = "Average Stress") +
+  annotate(geom = "text", x = as.Date("2022-10-25"), y = 22, label = " Taper begins", size = 3.2, hjust = "center") +
+  scale_color_gradient(low = "#4DBBD5", high = "#E64B35")
+```
+
+Stress is measured on a scale of 0-100, and an average daily stress level below 25 means your parasympathetic system is more active than your sympathetic system. My stress levels remained moderate during the training cycle, indicating good adaptation, and actually reached the lowest levels while my training was peaking in late October. Since my stress levels stayed low, it seems that my body was able to recover adequately from training and that it might be possible to try to train at a higher intensity or volume next time (as long as I keep an eye out for elevated stress).
+
+However, one interesting observation is that my stress increased dramatically during my taper. Few studies have been conducted regarding changes in RHR during taper, but most conclude that it generally does not change (Mujika et al., 2004). The month before my taper, my average resting heart rate was about 46, but in the last two weeks before my marathon, the average increased to 52 and 54. Perhaps, it appeared that my stress levels were increasing because heart rate is included in the stress calculation and my heart rate was higher overall.
+
+The increase in resting heart rate could have been caused by my training, but it also could have been due to sickness, external stress, or some other factor. When race day arrived, I unfortunately remember feeling somewhat deconditioned. But maybe this was all in my head because I had been paying too much attention to the data.
+
+### Notes
+<sup>1</sup>At first, I thought this was likely because VO2 max had a smaller range, but there is also one event during my training that I forgot to mention. In August, I moved to Colorado, and the elevation impacted my VO2 max for several weeks without affecting my RHR in the same way. This may be another factor that increased the variability of the VO2 max models.
+
+### References
+
+Hawley, John A. “Specificity of Training Adaptation: Time for a Rethink?: Perspectives.” *The Journal of Physiology*, vol. 586, no. 1, Jan. 2008, pp. 1–2, https://doi.org/10.1113/jphysiol.2007.147397.
+
+Jackson, Dan. “Resting Heart Rate.” *HSC PDHPE*, https://pdhpe.net/factors-affecting-performance/how-does-training-affect-performance/physiological-adaptations/resting-heart-rate/.
+
+Singh, Nikhil, et al. “Heart Rate Variability: An Old Metric with New Meaning in the Era of Using MHealth Technologies for Health and Exercise Training Guidance.” *Arrhythmia & Electrophysiology Review*, vol. 7, no. 3, 2018, p. 193, https://doi.org/10.15420/aer.2018.27.2.
+
+"Stress Tracking." Garmin, https://www.garmin.com/en-US/garmin-technology/health-science/stress-tracking/.
+
+“VO2 Max Testing.” Exercise Physiology Core Laboratory, University of Virginia, https://med.virginia.edu/exercise-physiology-core-laboratory/fitness-assessment-for-community-members/vo2-max-testing/.
